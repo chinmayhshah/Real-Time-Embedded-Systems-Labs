@@ -1,7 +1,10 @@
 /******************************************************************
 
-Program to code and demonstarte usage of mutexlock for Thread safe
-update of a complex safe with a timestamp 
+Q5 
+Program to code and demonstarte usage of mutex timed lock for timeout 
+time mentioned in as abs_time 
+
+Changing code for Read Thread 
 
 
 Thread one - update X,Y,Z co-ordinates and other attributes at a time 
@@ -26,17 +29,23 @@ orginal code by Sam Siewart referred from ptherad3.c for Ex3 Q2
 #include <sched.h>
 #include <time.h>
 #include <stdlib.h>
+#include <malloc.h>
 
 #define NUM_THREADS		3
 #define START_SERVICE 	0
 #define READ_SERVICE 	1
 #define WRITE_SERVICE 	2
 
+#define ERROR -1
+
+#define FIB_ITERATIONS 2000
+#define LOOPCOUNT 1
 
 
-//#define MUTEX_LOCK 
+#define MUTEX_LOCK 
 #define MAX_VALUE 360
 
+//#define SLEEPSIM 
 
 
 
@@ -98,22 +107,28 @@ unsigned int fib = 0, fib0 = 0, fib1 = 1;
 void *Write(void *threadid)
 {
   struct timespec timeWrite;
-
+	unsigned int i=0;
+  
   /*************
   The mutex object referenced by mutex shall be locked by calling pthread_mutex_lock().
   If the mutex is already locked,
   the calling thread shall block until the mutex becomes available
   *****/
-  while(1)
+  for (i=0;i<LOOPCOUNT;i++)
   { 
 		  #ifdef MUTEX_LOCK
 			pthread_mutex_lock(&msgSem);
 		  #endif	
-		  gettimeofday(&ng_state.timeNow);//Time
-		  gettimeofday(&timeWrite);
 		  
-		  //printf("**** %d Before Updating Navigation values , %d nsec\n", (int)threadid, 
+		  //Get time for as Locking write time
+		  clock_gettime(CLOCK_REALTIME, &ng_state.timeNow);
+		  //Lock time for as present write time
+		  clock_gettime(CLOCK_REALTIME, &timeWrite);
+		  
 		  printf("****@WRITE:Before update  %d secs %d nsec Values \n\t X=%lf deg Y=%lf deg Z=%lf deg \n\t acc=%lf \n\t yaw=%lf roll=%lf pitch=%lf \n", ng_state.timeNow.tv_sec, ng_state.timeNow.tv_nsec,ng_state.X,ng_state.Y,ng_state.Z,ng_state.acc,ng_state.yaw,ng_state.roll,ng_state.pitch);
+		  
+		  
+		  //Simulation of change in X,Y,Z values 
 		  if (ng_state.X>=MAX_VALUE)
 		  {
 			  ng_state.X=0;
@@ -121,7 +136,7 @@ void *Write(void *threadid)
 		  else
 		  {
 			  ///delay 
-			  FIB_TEST(seqIterations,13000);//approx 10ms/10
+			  FIB_TEST(seqIterations,FIB_ITERATIONS);//approx 10ms/10
 			  ng_state.X++;  
 		  }	  
 		  if (ng_state.Y>=MAX_VALUE)
@@ -131,7 +146,7 @@ void *Write(void *threadid)
 		  else
 		  {
 			  ///delay 
-			  FIB_TEST(seqIterations,13000);//approx 10ms/10
+			  FIB_TEST(seqIterations,FIB_ITERATIONS);//approx 10ms/10
 			  ng_state.Y+=2;  
 		  }	  
 		  
@@ -143,7 +158,7 @@ void *Write(void *threadid)
 		  else
 		  {
 			  ///delay 
-			  FIB_TEST(seqIterations,13000);//approx 10ms/10
+			  FIB_TEST(seqIterations,FIB_ITERATIONS);//approx 10ms/10
 			  ng_state.Z+=5;  
 		  }	  
 		  
@@ -154,7 +169,7 @@ void *Write(void *threadid)
 		  else
 		  {
 			  ///delay 
-			  FIB_TEST(seqIterations,13000);//approx 10ms/10
+			  FIB_TEST(seqIterations,FIB_ITERATIONS);//approx 10ms/10
 			  ng_state.yaw+=4;  
 		  }	  
 		  
@@ -166,7 +181,7 @@ void *Write(void *threadid)
 		  else
 		  {
 			  ///delay 
-			  FIB_TEST(seqIterations,13000);//approx 10ms/10
+			  FIB_TEST(seqIterations,FIB_ITERATIONS);//approx 10ms/10
 			  ng_state.acc+=10;  
 		  }	  
 		  
@@ -178,26 +193,30 @@ void *Write(void *threadid)
 		  else
 		  {
 			  ///delay 
-			  FIB_TEST(seqIterations,13000);//approx 10ms/10
+			  FIB_TEST(seqIterations,FIB_ITERATIONS);//approx 10ms/10
 			  ng_state.pitch+=20;			
 		  }	  
 		  
 		  
 		  
 		  
-		  
-		  
-		  
-		  
-		  
-		  
-		  
+		  //Simulating locking of resource for longer time 
+		  #ifdef SLEEPSIM
+			sleep(10);// Sleep for 10 seconds plus extra time by above FIB TEST
+			printf("\n\r Simulating locking of resource for 10 secs\n");
+		  #else
+			printf("\n\r No Simulation locking of resource for 10 secs\n");  
+		  #endif
+		    
 		  
 		  #ifdef MUTEX_LOCK
 			pthread_mutex_unlock(&msgSem);//unlock if locked
 		  #endif
 		  
-		  gettimeofday(&timeWrite);//Time
+		  
+		  clock_gettime(CLOCK_REALTIME, &timeWrite);
+		  
+		  //gettimeofday(&timeWrite);//Time
 		  printf("****@WRITE:After update  %d secs %d nsec Values \n\t X=%lf deg Y=%lf deg Z=%lf deg \n\t acc=%lf \n\t yaw=%lf roll=%lf pitch=%lf \n", ng_state.timeNow.tv_sec, ng_state.timeNow.tv_nsec,ng_state.X,ng_state.Y,ng_state.Z,ng_state.acc,ng_state.yaw,ng_state.roll,ng_state.pitch);
 		  
 		  
@@ -209,23 +228,54 @@ void *Write(void *threadid)
 
 void *Read(void *threadid)
 {
+  unsigned int retVal=0,i=0;	
   struct timespec timeRead;
+  
+  struct timespec waitabsTime;
+  
+  
+  //waitabsTime =(struct timespec *)(malloc(sizeof(struct timespec)));
+  //Time Out period for mutex lock
+  //waitabsTime->tv_sec =10;//10 secs 
+  //waitabsTime->tv_nsec= 0;//00 nsecs
 
   /*************
+  int pthread_mutex_timedlock(pthread_mutex_t *restrict mutex,const struct timespec *restrict abs_timeout); 
+  
   The mutex object referenced by mutex shall be locked by calling pthread_mutex_lock().
-  If the mutex is already locked,
-  the calling thread shall block until the mutex becomes available
+  If the mutex is already locked,the calling thread shall block until the mutex becomes available
+  If the mutex cannot be locked without waiting for another thread to unlock the mutex, this wait shall be terminated when the specified timeout expires.The timeout shall expire when the absolute time specified by abs_timeout passes, as measured by the clock on which timeouts are based (that is, when the value of that clock equals or exceeds abs_timeout), or if the absolute time specified by abs_timeout has already been passed at the time of the call.
   *****/
-  while(1)
+  for (i=0;i<LOOPCOUNT;i++)
   {
 	  
-	  //Default init ??
+	  
 	  #ifdef MUTEX_LOCK
-		pthread_mutex_lock(&msgSem);
-	  #endif
-		  gettimeofday(&timeRead);
+	  
+		//updating absolute time relative to present time by 10 secs
+		
+		clock_gettime(CLOCK_REALTIME,&waitabsTime);
+		waitabsTime.tv_sec +=10;
+		//
+		
+		retVal=pthread_mutex_timedlock(&msgSem,&waitabsTime);//wait for 10 secs
+		
+	  #endif	
+		if (retVal!=0)
+		{
+			clock_gettime(CLOCK_REALTIME, &timeRead);
+			printf("****@READ: No New data available @ %d secs %d nsec\n",timeRead.tv_sec, timeRead.tv_nsec);  		  
+			perror("Wait Timed Out");
+			//return;
+		}
+		else
+		{
+  
+		  clock_gettime(CLOCK_REALTIME, &timeRead);
+		  //gettimeofday(&timeRead);
 		  printf("****@READ: TimeStamp %d secs %d nsec\n",timeRead.tv_sec, timeRead.tv_nsec);  
 		  printf("****@READ:At Write TimeStamp %d secs %d nsec Values \n\t X=%lf deg Y=%lf deg Z=%lf deg \n\t acc=%lf \n\t yaw=%lf roll=%lf pitch=%lf \n ", ng_state.timeNow.tv_sec, ng_state.timeNow.tv_nsec,ng_state.X,ng_state.Y,ng_state.Z,ng_state.acc,ng_state.yaw,ng_state.roll,ng_state.pitch);
+		}  
 	  #ifdef MUTEX_LOCK
 			pthread_mutex_unlock(&msgSem);//unlock if locked
 	  #endif
@@ -381,6 +431,8 @@ void *startService(void *threadid)
    struct timespec timeNow;
    int rc;
 
+   struct timespec rtclk_resolution;
+   
    //Initial dummy values for navigational data 
 	ng_state.X=100.0;
 	ng_state.Y=50.0;
@@ -392,8 +444,21 @@ void *startService(void *threadid)
 	ng_state.timeNow.tv_nsec =0.0;
 	ng_state.timeNow.tv_sec =0.0;
 	   
-  
+  //clock_getres() finds the resolution (precision) of the specified clock clk_id,
+  //and, if res is non-NULL, stores it in the struct timespec pointed to by res
+  if(clock_getres(CLOCK_REALTIME, &rtclk_resolution) == ERROR)
+  {
+      perror("clock_getres");
+      exit(-1);
+  }
+  else
+  {
+      printf("\n\nPOSIX Clock demo using system RT clock with resolution:\n\t%ld secs, %ld microsecs, %ld nanosecs\n", rtclk_resolution.tv_sec, (rtclk_resolution.tv_nsec/1000), rtclk_resolution.tv_nsec);
+  }
 
+
+  
+  
 	//Creating Write Service and updating its parameters
    rt_param[WRITE_SERVICE].sched_priority = rt_max_prio-10;
    pthread_attr_setschedparam(&rt_sched_attr[WRITE_SERVICE], &rt_param[WRITE_SERVICE]);

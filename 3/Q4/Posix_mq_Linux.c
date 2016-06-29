@@ -3,7 +3,7 @@ Sam Siewert - 7/8/97
 Compiled and tested for: Solaris 2.5
 Re-tested on Linux 2.6
 
-Updated by @Chinmay Shah and ported from  heap_mq.c(code by Prof Sam Siewert)
+Updated by @Chinmay Shah and ported from  posix_mq.c(code by Prof Sam Siewert)
             referred posix_linux_demo (code by Prof Sam Siewert)
 
 
@@ -49,18 +49,19 @@ Referring source code of Prof @SAM Siewart
 
 //Included for msg queues
 #include <mqueue.h> //message queue header
-//#include <msgQLib.h> //??
 #include <fcntl.h> /* O_flags */
 #include <sys/types.h>
 #include <sys/stat.h>//mode constant
 
 
-#define SNDRCV_MQ "/send_rxv_mq"
+#define SNDRCV_MQ "/send_rxc_mq"
 #define ERROR (-1)
+
+#define MAX_MSG_SIZE 128
 
 // Attribute for Message Queue declaration
 static struct mq_attr mq_attr;
-static mqd_t mymq; //?
+//static mqd_t mymq; //?
 
 
 //Attribute for priority and scheduling 
@@ -73,7 +74,7 @@ pthread_t rx_thr_id,tx_thr_id;
 
 
 
-
+static char canned_msg[] = "this is a test, and only a test, in the event of a real emergency, you would be instructed ...";
 
 
 
@@ -111,18 +112,16 @@ void print_scheduler(void)
 
 void *receiver(void * R)
 {
-  char buffer[sizeof(void *)+sizeof(int)];
-  void *buffptr;
+  char buffer[MAX_MSG_SIZE];
+  static mqd_t mymq;
   int prio;
   int nbytes;
-  int count = 0;
-  int id;
 
-  while(1) {
+  /* note that VxWorks does not deal with permissions? */
+  mymq = mq_open(SNDRCV_MQ, O_CREAT|O_RDWR, 0644, &mq_attr);
 
-    /* read oldest, highest priority msg from the message queue */
-
-    printf("Reading %ld bytes\n", sizeof(void *));
+  if(mymq == (mqd_t)ERROR)
+    perror("mq_open");
 
     /*******
     ssize_t mq_receive (mqd_t mqdes, char *msg_ptr, size_t msg_len,
@@ -141,78 +140,47 @@ void *receiver(void * R)
 /*
     if((nbytes = mq_receive(mymq, (void *)&buffptr, (size_t)sizeof(void *), &prio)) == ERROR)
 */
-    if((nbytes = mq_receive(mymq, buffer, (size_t)(sizeof(void *)+sizeof(int)), &prio)) == ERROR)
-
-    {
-      printf("IN RXV Error \n");
-      perror("mq_receive");
-    }
-    else
-    {
-      memcpy(&buffptr, buffer, sizeof(void *));
-      memcpy((void *)&id, &(buffer[sizeof(void *)]), sizeof(int));
-      printf("receive: ptr msg 0x%X received with priority = %d, length = %d, id = %d\n", buffptr, prio, nbytes, id);
-
-      printf("contents of ptr = \n%s\n", (char *)buffptr);
-
-      free(buffptr);
-
-      printf("heap space memory freed\n");
-
-    }
-
+     if((nbytes = mq_receive(mymq, buffer, MAX_MSG_SIZE, &prio)) == ERROR)
+  {
+    perror("mq_receive");
   }
-
+  else
+  {
+    buffer[nbytes] = '\0';
+    printf("receive: msg %s received with priority = %d, length = %d\n",
+           buffer, prio, nbytes);
+  }
+    
 }
 
 
-static char imagebuff[4096];
+
+
+
+
 
 void *sender(void * S)
 {
-  char buffer[sizeof(void *)+sizeof(int)];
-  void *buffptr;
+  static mqd_t mymq;
   int prio;
   int nbytes;
-  int id = 999;
 
+  
+  mymq = mq_open(SNDRCV_MQ, O_RDWR, 0644, &mq_attr);
 
-  while(1) {
+  if(mymq == (mqd_t)ERROR)
+    perror("mq_open");
 
-    /* send malloc'd message with priority=30 */
-
-    buffptr = (void *)malloc(sizeof(imagebuff));
-    strcpy(buffptr, imagebuff);
-    printf("Message to send = %s\n", (char *)buffptr);
-
-    printf("Sending %ld bytes\n", sizeof(buffptr));
-
-    memcpy(buffer, &buffptr, sizeof(void *));
-    memcpy(&(buffer[sizeof(void *)]), (void *)&id, sizeof(int));
-
-    /****
-    int mq_send (mqd_t mqdes, const char *msg_ptr, size_t msg_len,
-             unsigned int msg_prio);
-     The msg_ptr points to the message buffer. msg_len is the size of the message,
-     which should be less than or equal to the message size for the queue.
-     msg_prio is the message priority,
-     which is a non-negative number specifying the priority of the message.
-
-    *****/
-
-    if((nbytes = mq_send(mymq, buffer, (size_t)(sizeof(void *)+sizeof(int)), 30)) == ERROR)
-    {
-      perror("mq_send");
-    }
-    else
-    {
-      printf("send: message ptr 0x%X successfully sent\n", buffptr);
-    }
-
-    usleep(30000);
-
+  /* send message with priority=30 */
+  if((nbytes = mq_send(mymq, canned_msg, sizeof(canned_msg), 30)) == ERROR)
+  {
+    perror("mq_send");
   }
-
+  else
+  {
+    printf("send: message successfully sent\n");
+  }
+  
 }
 
 
@@ -221,21 +189,8 @@ static int sid, rid;
 //Main of program
 main() {
 
-  int i, j;
-  char pixel = 'A';
 
-  for(i=0;i<4096;i+=64) {
-  pixel = 'A';
-  for(j=i;j<i+64;j++) {
-     imagebuff[j] = (char)pixel++;
-    }
-   imagebuff[j-1] = '\n';
-  }
-  imagebuff[4095] = '\0';
-  imagebuff[63] = '\0';
-
-  printf("buffer =\n%s", imagebuff);
-
+  static mqd_t mymq;
   print_scheduler();
 
   /***************** setup common message q attributes
@@ -249,46 +204,8 @@ main() {
   */
 
   mq_attr.mq_maxmsg = 100;
-  mq_attr.mq_msgsize = sizeof(void *)+sizeof(int);
+  mq_attr.mq_msgsize = MAX_MSG_SIZE;
   mq_attr.mq_flags = 0;
-
-
-  /************
-   mqd_t mq_open(const char *name, int oflag, mode_t mode,
-                     struct mq_attr *attr);
-    a name of the form /somename; that is, a null-
-    terminated string of up to NAME_MAX (i.e., 255) characters consisting
-    of an initial slash, followed by one or more characters, none of
-    which are slashes.  Two processes can operate on the same queue by
-    passing the same name to
-
-     oflag-
-     O_CREAT- Create queue if not already created
-     O_RDWR -  for both send and receive operations on the queue
-     O_NONBLOCK - to use the queue in a non-blocking mode(errno set to EAGAIN).
-                By default, mq_send would block if the queue was full
-                and mq_receive would block if there was no message in the queue
-
-    if  call is successful -  message queue descriptor is returned which can be used in subsequent calls
-
-    mode - specify permissions
-        - 0 - No permission , in Vxworks code not permission checked
-        -changed to mode S_IRWXU - ??
-
-
-  */
-  //mymq = mq_open(SNDRCV_MQ, O_CREAT|O_RDWR, S_IRWXU, &mq_attr);
-  mymq = mq_open(SNDRCV_MQ, O_CREAT|O_RDWR, 0644, &mq_attr);
-
-
-  if(mymq == (mqd_t)ERROR)
-  {
-	 printf("Errno = %d\n",errno);
-	printf("\n\r Error in  Message Queue  creation \n\r");
-    perror("mq_open");
-	
-  }
-  printf("\n\r Message Queue is created \n\r");
 
 
   //assigning priority 
@@ -361,13 +278,12 @@ main() {
   fflush(stdout);
   //close message queue
   //rc = ;
-
+  
   if(mq_close(mymq) == ERROR)
   {
     perror("receiver mq_close");
     exit(-1);
   }
-	
-   printf ("Mqueue closed\n");	
+  printf ("Mqueue closed\n");	
 
 }

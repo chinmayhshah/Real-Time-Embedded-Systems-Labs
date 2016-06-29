@@ -38,7 +38,6 @@ Referring source code of Prof @SAM Siewart
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h> // for getpid() function[get process id number of the calling process]
 #include <signal.h>
 #include <semaphore.h>
 #include <errno.h>
@@ -311,14 +310,8 @@ main() {
 
    */
    
-   sched_setscheduler(getpid(), SCHED_FIFO, &rx_param);
-   printf("\r\nAfter updating scheduler:\r\n");
    print_scheduler();
-   pthread_attr_setschedparam(&main_sched_attr, &rx_param);
-
-   pthread_create(&rx_thr_id, &main_sched_attr, receiver, NULL);
-   
-  /*if(pthread_create(&rx_thr_id, &main_sched_attr, receiver, NULL)) {
+  if(pthread_create(&rx_thr_id, &main_sched_attr, receiver, NULL)) {
     perror("creating Rxv  thread\n");
     exit(-1);
    }
@@ -331,18 +324,16 @@ main() {
 
       exit(0);
 
-    }*/
-  
-  pthread_attr_setschedparam(&main_sched_attr, &tx_param);
+    }
 
-  pthread_create(&tx_thr_id, &main_sched_attr, sender, NULL);
+
     //Creating thread for sender
-  /*if(pthread_create(&tx_thr_id, &main_sched_attr, sender, NULL)) {
+  if(pthread_create(&tx_thr_id, &main_sched_attr, sender, NULL)) {
     perror("creating Sender  thread\n");
     exit(-1);
    }
   else {
-      // make process wait on idle thread to do pthread_exit 
+      /* make process wait on idle thread to do pthread_exit */
       pthread_join(tx_thr_id, NULL);
 
       printf("Tx thread exited, process exiting\n");
@@ -350,12 +341,10 @@ main() {
 
       exit(0);
 
-    }*/
+    }
 
   
-  pthread_join(rx_thr_id, NULL);
-  pthread_join(tx_thr_id, NULL);
-	
+
   printf ("Rxv and Tx task/process has been spawned\n");
 
   fflush(stdout);
@@ -367,7 +356,6 @@ main() {
     perror("receiver mq_close");
     exit(-1);
   }
-	
-   printf ("Mqueue closed\n");	
+
 
 }
