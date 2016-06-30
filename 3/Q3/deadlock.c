@@ -1,8 +1,8 @@
 /************************************************************
-Code by Prof Sam Seiwart for portraying a priority Inversion situation
+Code by Prof Sam Seiwart for portraying a deadlock(circular wait)
 
 updation of Code by chinmay.shah@colorado.edu
-1)
+
 
 ************************************************************/
 
@@ -53,10 +53,9 @@ void *grabRsrcs(void *threadid)
    {
 
      printf("THREAD 2 grabbing resources\n");
+	 usleep(1000000);
      pthread_mutex_lock(&rsrcB);
      rsrcBCnt++;
-
-
      if(!noWait) usleep(1000000);
      // The comment had a mistake of THread 1 ---> changing it to Thread 2
 
