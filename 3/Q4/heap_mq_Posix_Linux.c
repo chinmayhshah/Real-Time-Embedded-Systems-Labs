@@ -361,7 +361,7 @@ main() {
   fflush(stdout);
   //close message queue
   //rc = ;
-
+  // use ,mq_unlink()
   if(mq_close(mymq) == ERROR)
   {
     perror("receiver mq_close");
